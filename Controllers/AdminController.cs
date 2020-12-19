@@ -170,6 +170,37 @@ namespace CESystem.Controllers
             _db.SaveChanges();
             return Ok("Currency commission operations completed");
         }
+        
+        [HttpPost("currency_limit_operation")]
+        public IActionResult CurrencyLimitOperation(string curr, string low, string up, string confirm)
+        {
+            if (curr == null)
+                return BadRequest("Incorrect request params");
+
+            Currency currency = _db.Currencies.FirstOrDefault(c => c.Name.Equals(curr));
+
+            if (currency == null)
+                return BadRequest("Currency doesn't exist");
+            
+            try
+            {
+                if (low != null)
+                    currency.LowerCommissionLimit = Convert.ToDouble(low.Replace(".", ","));
+                
+                if (up != null)
+                    currency.UpperCommissionLimit = Convert.ToDouble(up.Replace(".", ","));
+                
+                if (confirm != null)
+                    currency.ConfirmCommissionLimit = Convert.ToDouble(confirm.Replace(".", ","));
+            }
+            catch (Exception e)
+            {
+                return BadRequest("Limits must be numbers");
+            }
+
+            _db.SaveChanges();
+            return Ok("Currency limit operations completed");
+        }
 
         [HttpPost("currency_operation")]
         public IActionResult CurrencyOperation(string id, string curr)
