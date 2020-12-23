@@ -3,7 +3,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 namespace CESystem.Migrations
 {
-    public partial class InitalMigration : Migration
+    public partial class InitalMgration : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
@@ -14,11 +14,13 @@ namespace CESystem.Migrations
                     id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     name = table.Column<string>(type: "text", nullable: false),
-                    commission = table.Column<string>(type: "text", nullable: true),
+                    transfer_commission = table.Column<double>(type: "double precision", nullable: true),
+                    withdraw_commission = table.Column<double>(type: "double precision", nullable: true),
+                    deposit_commission = table.Column<double>(type: "double precision", nullable: true),
                     absolute_commission_status = table.Column<bool>(type: "boolean", nullable: true),
                     upper_commission_limit = table.Column<double>(type: "double precision", nullable: true),
                     lower_commission_limit = table.Column<double>(type: "double precision", nullable: true),
-                    confirm_commission_limit = table.Column<double>(type: "double precision", nullable: true)
+                    confirm_limit = table.Column<double>(type: "double precision", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -47,7 +49,6 @@ namespace CESystem.Migrations
                     id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     created_date = table.Column<string>(type: "text", nullable: false),
-                    last_modified = table.Column<string>(type: "text", nullable: true),
                     id_user = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
@@ -68,7 +69,9 @@ namespace CESystem.Migrations
                     id_account = table.Column<int>(type: "integer", nullable: false),
                     id_currency = table.Column<int>(type: "integer", nullable: false),
                     cash_value = table.Column<double>(type: "double precision", nullable: false, defaultValue: 0.0),
-                    commission = table.Column<double>(type: "double precision", nullable: true),
+                    transfer_commission = table.Column<double>(type: "double precision", nullable: true),
+                    withdraw_commission = table.Column<double>(type: "double precision", nullable: true),
+                    deposit_commission = table.Column<double>(type: "double precision", nullable: true),
                     absolute_commission_status = table.Column<bool>(type: "boolean", nullable: true)
                 },
                 constraints: table =>
