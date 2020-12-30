@@ -1,279 +1,115 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading.Tasks;
 using CESystem.AdminPart;
 using CESystem.DB;
 using CESystem.Models;
-using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace CESystem.Controllers
 {
-    [Authorize(Roles = "client, admin")]
-    [Route("/account/user")]
-    public class UserController : Controller
+    [Route("account")]
+    public class AccountController : Controller
     {
         private readonly LocalDbContext _db;
-        private readonly IAdminContext _adminContext;
+        private readonly ILogger _log;
         
-        public UserController(LocalDbContext dbContext, IAdminContext adminContext)
+        public AccountController(LocalDbContext dbContext, ILogger<Startup> logger)
         {
-           _db = dbContext;
-           _adminContext = adminContext;
+            _db = dbContext;
+            _log = logger;
         }
 
         [HttpGet("home")]
         public IActionResult Home()
         {
-            return Ok($"Welcome Client {HttpContext.User.Identity.Name}");
+            return Content("home page");
         }
 
-        [HttpPost("transfer")]
-        public IActionResult TransferMoney(string toUserName, string sum, string curr)
+        [HttpPost("login")]
+        public async Task<IActionResult> Login(string name, string password)
         {
-            if (curr == null || sum == null)
-                return BadRequest("Incorrect request params");
+            if (name == null || password == null) return BadRequest("Incorrect requests parameters");
+
+            var passwordHash = HashPassword(password);
+            User loginUser = await _db.Users.FirstOrDefaultAsync(x => x.Name == name && x.Password == passwordHash);
+
+            if (loginUser == null)
+                return StatusCode(403, "User not Found");
             
-            double targetSum;
+            //_log.LogInformation($"{loginUser.Id}");
+            await Authenticate(loginUser);
             
-            try
-            {
-                targetSum = Convert.ToDouble(sum.Replace(".", ","));
-            }
-            catch (Exception e)
-            {
-                return BadRequest("Sum must be number");
-            }
-            
-            Currency currency = _db.Currencies.FirstOrDefault(c => c.Name.Equals(curr));;
-
-            if (currency == null)
-                return BadRequest("Currency not found");
-            
-            User toUser = _db.Users.FirstOrDefault(u => u.Name == toUserName);
-            User fromUser = _db.Users.FirstOrDefault(u => u.Name == HttpContext.User.Identity.Name);
-
-            if (toUser == null)
-                return NotFound("Host user not found");
-            
-            Account fromAccount = _db.Accounts.FirstOrDefault(a => a.UserId == fromUser.Id);
-            Account toAccount = _db.Accounts.FirstOrDefault(a => a.UserId == toUser.Id);
-
-
-            Purse toPurse = _db.Purses.FirstOrDefault(p => p.IdAccount == toAccount.Id && p.IdCurrency == currency.Id);
-            Purse fromPurse = _db.Purses.FirstOrDefault(p => p.IdAccount == fromAccount.Id && p.IdCurrency == currency.Id);
-
-            if (fromPurse == null)
-                return BadRequest("You don't have money in this currency");
-            
-            var transferCommission = 0.0;
-
-            var personalCommission = fromPurse.TransferCommission;
-            var personalCommissionStatus = fromPurse.IsAbsoluteCommissionValue;
-            var publicCommission = currency.TransferCommission;
-            var upperCommissionLimit = currency.UpperCommissionLimit;
-            var lowerCommissionLimit = currency.LowerCommissionLimit;
-            var commissionStatus = currency.IsAbsoluteCommissionValue;
-            var commissionConfirmValue = currency.ConfirmCommissionLimit;
-
-            if (personalCommission == null)
-            {
-                if (publicCommission != null)
-                { 
-                    if (commissionStatus == null)
-                        transferCommission = (double) (targetSum * publicCommission / 100.0);
-                    else
-                        transferCommission = (double) publicCommission;
-                }
-            }
-            else
-            { 
-                if (personalCommissionStatus == null)
-                    transferCommission = (double) (targetSum * personalCommission / 100.0);
-                else
-                    transferCommission = (double) personalCommission;
-            }
-
-            if (transferCommission > upperCommissionLimit)
-                transferCommission = (double) upperCommissionLimit;
-
-            if (transferCommission < lowerCommissionLimit)
-                transferCommission = (double) lowerCommissionLimit;
-
-            if (fromPurse.CashValue - transferCommission - targetSum < 0.0)
-                return BadRequest("You don't have enough money to make a transfer");
-
-            if (toPurse == null)
-            { 
-                toPurse = new Purse
-                {
-                    IdAccount = toAccount.Id,
-                    Account = toAccount,
-                    Currency = currency,
-                    IdCurrency = currency.Id,
-                    CashValue = targetSum
-                };
-
-                _db.Purses.Add(toPurse);
-                _db.SaveChanges();
-            }
-
-            if (commissionConfirmValue != null && targetSum >= commissionConfirmValue)
-            {
-                _adminContext.AddRequestToConfirmTransfer(fromPurse, toPurse, targetSum);
-                return Ok("your transaction is pending confirmation, please wait.");
-            }
-            
-            toPurse.CashValue += targetSum;
-            fromPurse.CashValue -= transferCommission + targetSum;
-            
-            _db.SaveChanges();
-
-            return Ok("Transfer completed");
+            return Redirect("/account/user/home");
         }
 
-        [HttpPost("deposit")]
-        public IActionResult DepositMoney(string sum, string curr)
+        [HttpGet("login")]
+        public IActionResult Login()
         {
-            if (curr == null || sum == null)
-                return BadRequest("Incorrect request params");
-            
-            double targetSum;
-            
-            try
-            {
-                targetSum = Convert.ToDouble(sum.Replace(".", ","));
-            }
-            catch (Exception e)
-            {
-                return BadRequest("Sum must be number");
-            }
-            
-            Currency currency = _db.Currencies.FirstOrDefault(c => c.Name.Equals(curr));;
-
-            if (currency == null)
-                return BadRequest("Currency not found");
-            
-            User me = _db.Users.FirstOrDefault(u => u.Name == HttpContext.User.Identity.Name);
-            Account myAccount = _db.Accounts.FirstOrDefault(a => a.UserId == me.Id);
-            Purse myPurse = _db.Purses.FirstOrDefault(p => p.IdAccount == myAccount.Id && p.IdCurrency == currency.Id);
-
-            if (myPurse == null)
-            {
-                myPurse = new Purse
-                {
-                    IdAccount = myAccount.Id,
-                    Account = myAccount,
-                    Currency = currency,
-                    IdCurrency = currency.Id,
-                };
-
-                _db.Purses.Add(myPurse);
-                _db.SaveChanges();
-            }
-            
-            var depositCommission = 0.0;
-            var personalCommission = myPurse.DepositCommission;
-            var personalCommissionStatus = myPurse.IsAbsoluteCommissionValue;
-            var publicCommission = currency.DepositCommission;
-            var commissionStatus = currency.IsAbsoluteCommissionValue;
-
-            if (personalCommission == null)
-            {
-                if (publicCommission != null)
-                { 
-                    if (commissionStatus == null)
-                        depositCommission = (double) (targetSum * publicCommission / 100.0);
-                    else
-                        depositCommission = (double) publicCommission;
-                }
-            }
-            else
-            { 
-                if (personalCommissionStatus == null)
-                    depositCommission = (double) (targetSum * personalCommission / 100.0);
-                else
-                    depositCommission = (double) personalCommission;
-            }
-            
-            if (currency.ConfirmCommissionLimit != null && targetSum > currency.ConfirmCommissionLimit)
-            {
-                _adminContext.AddRequestToConfirmOther(myPurse, targetSum, "deposit");
-                return Ok("your transaction is pending confirmation, please wait.");
-            }
-            
-            myPurse.CashValue += targetSum - depositCommission;
-            _db.SaveChanges();
-            
-            return Ok("Deposit completed");
+            return Content("login page");
         }
         
-        [HttpPost("withdraw")]
-        public IActionResult WithdrawMoney(string sum, string curr)
+        [HttpGet("need_login")]
+        public IActionResult NeedLogin()
         {
-            if (curr == null || sum == null)
-                return BadRequest("Incorrect request params");
-            
-            double targetSum;
-            
-            try
-            {
-                targetSum = Convert.ToDouble(sum.Replace(".", ","));
-            }
-            catch (Exception e)
-            {
-                return BadRequest("Sum must be number");
-            }
-            
-            Currency currency = _db.Currencies.FirstOrDefault(c => c.Name.Equals(curr));;
+            return Content("login please");
+        }
 
-            if (currency == null)
-                return BadRequest("Currency not found");
+        [HttpPost("registration")]
+        public async Task<IActionResult> Registration(string name, string password)
+        {
+            User user = await _db.Users.FirstOrDefaultAsync(u => u.Name == name);
             
-            User me = _db.Users.FirstOrDefault(u => u.Name == HttpContext.User.Identity.Name);
-            Account myAccount = _db.Accounts.FirstOrDefault(a => a.UserId == me.Id);
-            Purse myPurse = _db.Purses.FirstOrDefault(p => p.IdAccount == myAccount.Id && p.IdCurrency == currency.Id);
-
-            if (myPurse == null)
-                return BadRequest("You don't have money in this currency");
-
-            var withdrawCommission = 0.0;
-            var personalCommission = myPurse.WithdrawCommission;
-            var personalCommissionStatus = myPurse.IsAbsoluteCommissionValue;
-            var publicCommission = currency.WithdrawCommission;
-            var commissionStatus = currency.IsAbsoluteCommissionValue;
-
-            if (personalCommission == null)
+            if (user == null)
             {
-                if (publicCommission != null)
-                { 
-                    if (commissionStatus == null)
-                        withdrawCommission = (double) (targetSum * publicCommission / 100.0);
-                    else
-                        withdrawCommission = (double) publicCommission;
-                }
-            }
-            else
-            { 
-                if (personalCommissionStatus == null)
-                    withdrawCommission = (double) (targetSum * personalCommission / 100.0);
-                else
-                    withdrawCommission = (double) personalCommission;
+                var passwordHash = HashPassword(password);
+                user = new User {Name = name, Password = passwordHash, CreatedDate = DateTime.Now.ToString("dd-MM-yyyy hh:mm:ss")};
+                
+                await _db.Users.AddAsync(user);
+                await _db.Accounts.AddAsync(new Account {UserId = user.Id, User = user});
+                await _db.SaveChangesAsync();
+                
+                await Authenticate(user); 
+                
+                return Redirect("/account/user/home");
             }
             
-            if (myPurse.CashValue - targetSum - withdrawCommission < 0.0) 
-                return BadRequest("You don't have enough money to make withdraw");
-            
-            if (currency.ConfirmCommissionLimit != null && targetSum > currency.ConfirmCommissionLimit)
+            return BadRequest("User with that username is already exist");
+        }
+
+
+        [HttpGet("registration")]
+        public IActionResult Registration()
+        {
+            return Content("Registration Page");
+        }
+
+        private async Task Authenticate(User user)
+        {
+            var claims = new List<Claim>
             {
-                _adminContext.AddRequestToConfirmOther(myPurse, targetSum, "withdraw");
-                return Ok("your transaction is pending confirmation, please wait.");
-            }
+                new Claim(ClaimsIdentity.DefaultNameClaimType, user.Name),
+                new Claim(ClaimsIdentity.DefaultRoleClaimType, user.Role)
+            };
+
+            ClaimsIdentity id = new ClaimsIdentity(claims, "ApplicationCookie", ClaimsIdentity.DefaultNameClaimType,
+                ClaimsIdentity.DefaultRoleClaimType);
             
-            myPurse.CashValue -= targetSum + withdrawCommission;
-            _db.SaveChanges();
-            
-            return Ok("Withdraw completed");
+            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id));
+        }
+
+        private string HashPassword(string password)
+        {
+           return Convert.ToBase64String(new MD5CryptoServiceProvider().ComputeHash(Encoding.UTF8.GetBytes(password)));
         }
     }
 }

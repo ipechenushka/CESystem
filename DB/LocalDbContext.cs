@@ -12,53 +12,82 @@ namespace CESystem.DB
         {
         }
 
-        public DbSet<User> Users { get; set; }
-        public DbSet<Account> Accounts { set; get; }
-        public DbSet<Currency> Currencies { set; get; }
-        public DbSet<Purse> Purses { set; get; }
-        
+        public DbSet<UserRecord> UserRecords { get; set; }
+        public DbSet<AccountRecord> AccountRecords { set; get; }
+        public DbSet<CurrencyRecord> CurrencyRecords { set; get; }
+        public DbSet<WalletRecord> WalletRecords { set; get; }
+        public DbSet<OperationsHistoryRecord> OperationsHistoryRecords { set; get; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<User>()
+            modelBuilder.Entity<UserRecord>()
                 .HasIndex(u => u.Name).IsUnique();
 
             modelBuilder
-                .Entity<Currency>()
+                .Entity<CurrencyRecord>()
                 .HasIndex(c => c.Name).IsUnique();
 
             modelBuilder
-                .Entity<User>()
+                .Entity<UserRecord>()
                 .Property(u => u.Role)
                 .HasDefaultValue("client");
-            
+
             modelBuilder
-                .Entity<Purse>()
+                .Entity<WalletRecord>()
                 .Property(p => p.CashValue)
                 .HasDefaultValue(0.0);
+
+            modelBuilder
+                .Entity<CommissionRecord>()
+                .HasCheckConstraint("correct_commission", "id_user not null || id_currency not null");
+            
             
             modelBuilder
-                .Entity<Account>()
-                .HasOne(a => a.User)
-                .WithMany(u => u.Accounts)
+                .Entity<UserRecord>()
+                .HasOne(u => u.CommissionRecord)
+                .WithOne(c => c.UserRecord)
+                .HasForeignKey<CommissionRecord>(c => c.UserId)
+                .HasConstraintName("FK_id_user");
+
+            modelBuilder
+                .Entity<AccountRecord>()
+                .HasOne(a => a.UserRecord)
+                .WithMany(u => u.AccountRecords)
                 .HasForeignKey(a => a.UserId)
                 .HasConstraintName("FK_id_user");
 
             modelBuilder
-                .Entity<Currency>()
-                .HasMany(a => a.Accounts)
-                .WithMany(c => c.Currencies)
-                .UsingEntity<Purse>(
-                    purse => purse
-                        .HasOne(p => p.Account)
-                        .WithMany(a => a.Purses)
+                .Entity<OperationsHistoryRecord>()
+                .HasOne(oh => oh.UserRecord)
+                .WithMany(u => u.OperationsHistoryRecords)
+                .HasForeignKey(u => u.UserId)
+                .HasConstraintName("FK_id_user");
+            
+            
+            modelBuilder
+                .Entity<CurrencyRecord>()
+                .HasOne(c => c.CommissionRecord)
+                .WithOne(c => c.CurrencyRecord)
+                .HasForeignKey<CommissionRecord>(c => c.CurrencyId)
+                .HasConstraintName("FK_id_user");
+            
+            
+            modelBuilder
+                .Entity<CurrencyRecord>()
+                .HasMany(a => a.AccountRecords)
+                .WithMany(c => c.CurrencyRecords)
+                .UsingEntity<WalletRecord>(
+                    wallet => wallet
+                        .HasOne(p => p.AccountRecord)
+                        .WithMany(a => a.WalletRecords)
                         .HasForeignKey(p => p.IdAccount),
-                    purse => purse
-                        .HasOne(p => p.Currency)
-                        .WithMany(a => a.Purses)
+                    wallet => wallet
+                        .HasOne(p => p.CurrencyRecord)
+                        .WithMany(a => a.WalletRecords)
                         .HasForeignKey(p => p.IdCurrency),
-            purse =>
+            wallet =>
                     {
-                        purse.HasKey(p => new {p.IdAccount, p.IdCurrency});
+                        wallet.HasKey(p => new {p.IdAccount, p.IdCurrency});
                     });
         }
     }

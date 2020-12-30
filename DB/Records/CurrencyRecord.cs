@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace CESystem.Models
 {
     [Table("currency")]
-    public class Currency
+    public class CurrencyRecord
     {
         [Key, Column("id"), DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int Id { set; get; }
@@ -13,17 +13,6 @@ namespace CESystem.Models
         [Column("name"), Required]
         public string Name { set; get; }
         
-        [Column("transfer_commission")]
-        public double? TransferCommission { set; get; }
-        
-        [Column("withdraw_commission")]
-        public double? WithdrawCommission { set; get; }
-        
-        [Column("deposit_commission")]
-        public double? DepositCommission { set; get; }
-        
-        [Column("absolute_commission_status")]
-        public bool? IsAbsoluteCommissionValue { set; get; }
         
         [Column("upper_commission_limit")]
         public double? UpperCommissionLimit { set; get; } 
@@ -34,7 +23,8 @@ namespace CESystem.Models
         [Column("confirm_limit")]
         public double? ConfirmCommissionLimit { set; get; } 
         
-        public List<Purse> Purses { set; get; }
-        public List<Account> Accounts { set; get; }
+        public CommissionRecord CommissionRecord { set; get; }
+        public List<WalletRecord> WalletRecords { set; get; }
+        public List<AccountRecord> AccountRecords { set; get; }
     }
 }
