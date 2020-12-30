@@ -41,8 +41,8 @@ namespace CESystem
                 .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
                 .AddCookie(options => 
                 {
-                    options.LoginPath = new PathString("/account/need_login");
-                    options.AccessDeniedPath = new PathString("/account/login");
+                    options.LoginPath = new PathString("/login");
+                    options.AccessDeniedPath = new PathString("/login");
                 });
         }
 
@@ -57,10 +57,6 @@ namespace CESystem
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();
-                endpoints.MapGet("/", async context =>
-                {
-                    await context.Response.WriteAsync("Welcome to CESystem!");
-                });
             });
         }
     }
