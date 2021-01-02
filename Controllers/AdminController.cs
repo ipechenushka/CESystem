@@ -1,256 +1,269 @@
-using System;
-using System.Collections.Generic;
 using System.Linq;
-using CESystem.AdminPart;
+using System.Threading.Tasks;
+using CESystem.ClientPart;
 using CESystem.DB;
 using CESystem.Models;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 
 namespace CESystem.Controllers
 {
+    public enum CurrencyManipulationOperation
+    {
+        Add = 1,
+        Delete = 2,
+    }
+
+    public enum MoneyManipulationOperation
+    {
+        Charge = 1,
+        Withdraw = 2
+    }
+
+    public enum CommissionLevel
+    {
+        Global = 1,
+        Personal = 2
+    }
+    
     [Authorize(Roles = "admin")]
-    [Route("/account/admin")]
+    [Route("admin")]
     public class AdminController : Controller
     {
-        private readonly IAdminContext _adminContext;
+        private readonly IUserService _userService;
         private readonly LocalDbContext _db;
-
-        public AdminController(IAdminContext adminAction, LocalDbContext localDbContext)
+        public AdminController(IUserService userService, LocalDbContext localDbContext)
         {
-            _adminContext = adminAction;
+            _userService = userService;
             _db = localDbContext;
         }
 
         [HttpGet("home")]
         public IActionResult Home()
         {
-            return Ok($"Active requests to confirm: {_adminContext.RequestCount()}");
+            return Ok("admin home");
         }
 
-        [HttpPost("money_operation")]
-        public IActionResult MoneyOperation(string operId, string curr, string sum, string accId)
+        [HttpPost("users-money")]
+        public async Task<IActionResult> MoneyOperation(MoneyManipulationOperation operation, string currencyName, int accountId, float amount)
         {
-            if (operId == null || curr == null || sum == null || accId == null)
+            if (operation == null || currencyName == null || accountId == null || amount == null)
                 return BadRequest("Incorrect request params");
             
-            double targetSum;
-            int accountId;
-            int operationId;
-            
-            try
-            {
-                targetSum = Convert.ToDouble(sum.Replace(".", ","));
-                accountId = Convert.ToInt32(accId);
-                operationId = Convert.ToInt32(operId);
-            }
-            catch (Exception e)
-            {
-                return BadRequest("Sum, operationId and accountId must be number");
-            }
+            // try
+            // {
+            //     targetSum = Convert.ToDouble(sum.Replace(".", ","));
+            //     accountId = Convert.ToInt32(accId);
+            //     operationId = Convert.ToInt32(operId);
+            // }
+            // catch (Exception e)
+            // {
+            //     return BadRequest("Sum, operationId and accountId must be number");
+            // }
 
-            Currency currency = _db.Currencies.FirstOrDefault(c => c.Name.Equals(curr));
+            var currency = await _db.CurrencyRecords.FirstOrDefaultAsync(c => c.Name.Equals(currencyName));
 
             if (currency == null)
                 return BadRequest("Currency doesn't exist");
 
-            Purse userPurse = _db.Purses.FirstOrDefault(p => p.IdAccount == accountId && p.IdCurrency == currency.Id);
-            
-            
-            //operationId = 1: add money.
-            //operationId = 2: delete money.
-            switch (operationId)
+            var userWallet = currency.WalletRecords.FirstOrDefault(w => w.IdAccount == accountId && w.IdCurrency == currency.Id);
+
+            switch (operation)
             {
-                case 1:
-                    if (userPurse == null)
-                        _db.Purses.Add(new Purse
-                            {IdAccount = accountId, IdCurrency = currency.Id, CashValue = targetSum});
+                case MoneyManipulationOperation.Charge:
+                    if (userWallet == null)
+                        await _db.WalletRecords
+                            .AddAsync(new WalletRecord
+                        {
+                            IdAccount = accountId,
+                            IdCurrency = currency.Id,
+                            CashValue = amount
+                        });
                     else
-                        userPurse.CashValue += targetSum;
+                        userWallet.CashValue += amount;
                     break;
-                case 2:
-                    if (userPurse == null)
-                        return NotFound("User purse not found");
+                case MoneyManipulationOperation.Withdraw:
+                    if (userWallet == null)
+                        return NotFound("User wallet not found");
                     
-                    if (userPurse.CashValue - targetSum < 0.0)
+                    if (userWallet.CashValue - amount < 0.0)
                         return BadRequest("The amount on the account must not be negative");
 
-                    userPurse.CashValue -= targetSum;
+                    userWallet.CashValue -= amount;
                     break;
                 default:
                     return BadRequest("Undefined operation");
             }
 
-            _db.SaveChanges();
+            await _db.SaveChangesAsync();
             return Ok("money operation completed");
         }
 
-        [HttpPost("personal_commission_operation")]
-        public IActionResult PersonalCommissionOperation(string transferCommission, string depositCommission, string withdrawCommission , string curr, string accId, string isAbsolute)
+        [HttpPost("commission")]
+        public async Task<IActionResult> CommissionOperation(float? transferCommission, float? depositCommission, float? withdrawCommission, bool? isAbsoluteType, string currencyName, int? userId)
         {
-            if (curr == null || accId == null)
-                return BadRequest("Incorrect request params");
+            UserRecord user = null;
+            CurrencyRecord currency = null;
+            CommissionLevel commissionLevel;
             
-            int accountId;
+            // try
+            // {
+            //     accountId = Convert.ToInt32(accId);
+            // }
+            // catch (Exception e)
+            // {
+            //     return BadRequest("Commissions and accountId must be number");
+            // }
             
-            try
+            if (currencyName != null)
             {
-                accountId = Convert.ToInt32(accId);
-            }
-            catch (Exception e)
-            {
-                return BadRequest("Commissions and accountId must be number");
-            }
-
-            Currency currency = _db.Currencies.FirstOrDefault(c => c.Name.Equals(curr));
-
-            if (currency == null)
-                return BadRequest("Currency doesn't exist");
-
-            Purse userPurse = _db.Purses.FirstOrDefault(p => p.IdAccount == accountId && p.IdCurrency == currency.Id);
-
-            if (userPurse == null)
-                return BadRequest("This user don't have a purse with that currency");
-
-            try
-            {
-                if (transferCommission != null)
-                    userPurse.TransferCommission = Convert.ToDouble(transferCommission.Replace(".", ","));
+                commissionLevel = CommissionLevel.Global;
+                currency = await _userService.FindCurrencyAsync(currencyName);
                 
-                if (transferCommission != null)
-                    userPurse.DepositCommission = Convert.ToDouble(depositCommission.Replace(".", ","));
+                if (currency == null)
+                    return BadRequest("Currency doesn't exist!");    
                 
-                if (transferCommission != null)
-                    userPurse.WithdrawCommission = Convert.ToDouble(withdrawCommission.Replace(".", ","));
             }
-            catch (Exception e)
+            else if (userId != null)
             {
-                return BadRequest("Commissions and accountId must be number");
+                commissionLevel = CommissionLevel.Personal;
+                user = await _userService.FindUserByIdAsync((int) userId, null);
+
+                if (user == null)
+                    return BadRequest("User doesn't exist!");
             }
-
-            if (isAbsolute != null)
-                userPurse.IsAbsoluteCommissionValue = true;
-
-            _db.SaveChanges();
-            return Ok("Personal commission operations completed");
-        }
-
-        [HttpPost("currency_commission_operation")]
-        public IActionResult CurrencyCommissionOperation(string transferCommission, string depositCommission, string withdrawCommission , string curr, string isAbsolute)
-        {
-            if (curr == null)
+            else
                 return BadRequest("Incorrect request params");
 
-            Currency currency = _db.Currencies.FirstOrDefault(c => c.Name.Equals(curr));
-
-            if (currency == null)
-                return BadRequest("Currency doesn't exist");
             
-            try
+            if (transferCommission != null)
             {
-                if (transferCommission != null)
-                    currency.TransferCommission = Convert.ToDouble(transferCommission.Replace(".", ","));
-                
-                if (transferCommission != null)
-                    currency.DepositCommission = Convert.ToDouble(depositCommission.Replace(".", ","));
-                
-                if (transferCommission != null)
-                    currency.WithdrawCommission = Convert.ToDouble(withdrawCommission.Replace(".", ","));
+                if (commissionLevel == CommissionLevel.Global)
+                    currency.CommissionRecord.TransferCommission = transferCommission;
+                else
+                    user.CommissionRecord.TransferCommission = transferCommission;
             }
-            catch (Exception e)
+            
+            if (depositCommission != null)
             {
-                return BadRequest("Commissions must be number");
+                if (commissionLevel == CommissionLevel.Global)
+                    currency.CommissionRecord.DepositCommission = depositCommission;
+                else
+                    user.CommissionRecord.DepositCommission = depositCommission;
+            }
+            
+            if (withdrawCommission != null)
+            {
+                if (commissionLevel == CommissionLevel.Global)
+                    currency.CommissionRecord.WithdrawCommission = transferCommission;
+                else
+                    user.CommissionRecord.WithdrawCommission = transferCommission;
             }
 
-            if (isAbsolute != null)
-                currency.IsAbsoluteCommissionValue = true;
-
-            _db.SaveChanges();
-            return Ok("Currency commission operations completed");
+            if (isAbsoluteType != null)
+            {
+                if (commissionLevel == CommissionLevel.Global)
+                    currency.CommissionRecord.IsAbsoluteType = true;
+                else
+                    user.CommissionRecord.IsAbsoluteType = true;
+            }
+            
+            await _db.SaveChangesAsync();
+            return Ok("Commission operations completed");
         }
+
         
-        [HttpPost("currency_limit_operation")]
-        public IActionResult CurrencyLimitOperation(string curr, string low, string up, string confirm)
+        [HttpPost("currency-limit")]
+        public async Task<IActionResult> CurrencyLimitOperation(string currencyName, float? low, float? up, float? confirm)
         {
-            if (curr == null)
+            if (currencyName == null)
                 return BadRequest("Incorrect request params");
 
-            Currency currency = _db.Currencies.FirstOrDefault(c => c.Name.Equals(curr));
+            var currency = await _userService.FindCurrencyAsync(currencyName);
 
             if (currency == null)
                 return BadRequest("Currency doesn't exist");
-            
-            try
-            {
-                if (low != null)
-                    currency.LowerCommissionLimit = Convert.ToDouble(low.Replace(".", ","));
-                
-                if (up != null)
-                    currency.UpperCommissionLimit = Convert.ToDouble(up.Replace(".", ","));
-                
-                if (confirm != null)
-                    currency.ConfirmCommissionLimit = Convert.ToDouble(confirm.Replace(".", ","));
-            }
-            catch (Exception e)
-            {
-                return BadRequest("Limits must be numbers");
-            }
 
-            _db.SaveChanges();
+            if (low != null)
+                currency.LowerCommissionLimit = low;
+
+            if (up != null)
+                currency.UpperCommissionLimit = up;
+
+            if (confirm != null)
+                currency.ConfirmCommissionLimit = confirm;
+
+            await _db.SaveChangesAsync();
             return Ok("Currency limit operations completed");
         }
 
-        [HttpPost("currency_operation")]
-        public IActionResult CurrencyOperation(string id, string curr)
+        [HttpPost("currency")]
+        public async Task<IActionResult> CurrencyOperation(CurrencyManipulationOperation? cmo, string currencyName)
         {
-            if (curr == null || id == null)
+            if (currencyName == null || cmo == null)
                 return BadRequest("Incorrect request params");
+
+            var currency = await _userService.FindCurrencyAsync(currencyName);
             
-            int operationId;
-            
-            try
+            switch (cmo)
             {
-                operationId = Convert.ToInt32(id);
-            }
-            catch (Exception e)
-            {
-                return BadRequest("OperationId must be number");
-            }
-            
-            Currency currency = _db.Currencies.FirstOrDefault(c => c.Name.Equals(curr));
-            
-            //operationId = 1: add currency.
-            //operationId = 2: delete money.
-            switch (operationId)
-            {
-                case 1:
+                case CurrencyManipulationOperation.Add:
                     if (currency != null)
                         return BadRequest("This currency is already exist");
                     
-                    _db.Currencies.Add(new Currency {Name = curr});
+                    await _db.CurrencyRecords.AddAsync(new CurrencyRecord {Name = currencyName});
                     break;
-                case 2:
+                case CurrencyManipulationOperation.Delete:
                     if (currency == null)
                         return BadRequest("This currency doesn't exist");
 
-                    _db.Currencies.Remove(currency);
+                    _db.CurrencyRecords.Remove(currency);
                     break;
                 default:
                     return BadRequest("Undefined operation");
             }
 
-            _db.SaveChanges();
+            await _db.SaveChangesAsync();
             return Ok("Currency operation completed");
         }
-
+        
         [HttpGet("confirm")]
-        public IActionResult Confirm()
+        public async Task<IActionResult> Confirm(int? requestId)
         {
-            _adminContext.ConfirmAllRequests();
-            return Ok("All requests has been completed");
-        }
+            if (requestId == null)
+                return BadRequest("Incorrect request params");
+            
+            var request = await _db.ConfirmRequestRecords.FirstOrDefaultAsync(r => r.Id == requestId);
 
+            if (request == null)
+                return BadRequest("This request doesn't exist.");
+
+            var operationType = request.OperationType;
+            var currency = await _db.CurrencyRecords.FirstOrDefaultAsync(c => c.Name.Equals(request.Currency));
+            var senderWallet = await _db.WalletRecords.FirstOrDefaultAsync(w => w.IdCurrency == currency.Id && w.IdAccount == request.SenderId);
+
+            switch (operationType)
+            {
+                case OperationType.Transfer:
+                    var recipientWallet = await _db.WalletRecords.
+                        FirstOrDefaultAsync(w => w.IdCurrency == currency.Id && w.IdAccount == request.RecipientId);
+                    recipientWallet.CashValue += request.Amount;
+                    senderWallet.CashValue -= request.Amount + request.Commission;
+                    break;
+                case OperationType.Deposit:
+                    senderWallet.CashValue += request.Amount - request.Commission;
+                    break;
+                case OperationType.Withdraw:
+                    senderWallet.CashValue -= request.Amount + request.Commission;
+                    break;
+                default:
+                    return BadRequest("Operation not found");
+            }
+
+            request.Status = "completed";
+            await _db.SaveChangesAsync();
+            return Ok("Request has been completed");
+        }
     }
 }

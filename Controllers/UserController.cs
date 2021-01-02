@@ -2,114 +2,128 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading.Tasks;
-using CESystem.AdminPart;
+using CESystem.ClientPart;
 using CESystem.DB;
 using CESystem.Models;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace CESystem.Controllers
 {
-    [Route("account")]
-    public class AccountController : Controller
+    public enum AccountManipulationType
+    {
+        ChangeAccount = 1,
+        CreateNewAccount = 2
+    }
+    
+    [Route("")] 
+    public class UserController : Controller
     {
         private readonly LocalDbContext _db;
         private readonly ILogger _log;
+        private readonly IUserService _userService;
         
-        public AccountController(LocalDbContext dbContext, ILogger<Startup> logger)
+        public UserController(LocalDbContext dbContext, ILogger<Startup> logger, IUserService userService)
         {
             _db = dbContext;
             _log = logger;
+            _userService = userService;
         }
 
-        [HttpGet("home")]
+        [HttpGet, Route("home")]
         public IActionResult Home()
         {
-            return Content("home page");
+            return Content("Welcome to CESystem!");
         }
 
-        [HttpPost("login")]
+        [HttpPost, Route("login")]
         public async Task<IActionResult> Login(string name, string password)
         {
-            if (name == null || password == null) return BadRequest("Incorrect requests parameters");
-
-            var passwordHash = HashPassword(password);
-            User loginUser = await _db.Users.FirstOrDefaultAsync(x => x.Name == name && x.Password == passwordHash);
-
+            if (name == null || password == null) 
+                return BadRequest("Incorrect requests parameters");
+            
+            var loginUser = await _userService.FindUserByNameAsync(name, _userService.HashPassword(password));
+            
             if (loginUser == null)
                 return StatusCode(403, "User not Found");
-            
-            //_log.LogInformation($"{loginUser.Id}");
+
             await Authenticate(loginUser);
+
+            _log.LogInformation($"{loginUser.Name} has entered in server");
             
-            return Redirect("/account/user/home");
+            return loginUser.Role.Equals("admin")
+                ? Redirect("/admin/home")
+                : Redirect("/user/home");
         }
 
-        [HttpGet("login")]
+        [HttpGet, Route("login")]
         public IActionResult Login()
         {
-            return Content("login page");
-        }
-        
-        [HttpGet("need_login")]
-        public IActionResult NeedLogin()
-        {
-            return Content("login please");
+            return Content("Login Page");
         }
 
-        [HttpPost("registration")]
+        [HttpPost, Route("registration")]
         public async Task<IActionResult> Registration(string name, string password)
         {
-            User user = await _db.Users.FirstOrDefaultAsync(u => u.Name == name);
+            if (name == null || password == null) 
+                return BadRequest("Incorrect requests parameters");
+
+            var newUser = await _userService.FindUserByNameAsync(name, null);
             
-            if (user == null)
+            if (newUser == null)
             {
-                var passwordHash = HashPassword(password);
-                user = new User {Name = name, Password = passwordHash, CreatedDate = DateTime.Now.ToString("dd-MM-yyyy hh:mm:ss")};
+                newUser = new UserRecord
+                {
+                    Name = name, 
+                    Password = _userService.HashPassword(password), 
+                    CreatedDate = DateTime.Now.ToString("dd-MM-yyyy hh:mm:ss")
+                };
+
+                await _db.UserRecords.AddAsync(newUser);
+                await _db.SaveChangesAsync();
+
+                var newAccount = new AccountRecord { UserId = newUser.Id };
                 
-                await _db.Users.AddAsync(user);
-                await _db.Accounts.AddAsync(new Account {UserId = user.Id, User = user});
+                await _db.AccountRecords.AddAsync(newAccount);
+                await _db.SaveChangesAsync();
+
+                newUser.CurrentAccount = newAccount.Id;
+                
+                await Authenticate(newUser);
                 await _db.SaveChangesAsync();
                 
-                await Authenticate(user); 
+                _log.LogInformation($"{newUser.Name} has registered in server");
                 
-                return Redirect("/account/user/home");
+                return Redirect($"/user/account");
             }
             
-            return BadRequest("User with that username is already exist");
+            return BadRequest("User with that name is already exist");
         }
 
 
-        [HttpGet("registration")]
+        [HttpGet, Route("registration")]
         public IActionResult Registration()
         {
             return Content("Registration Page");
         }
 
-        private async Task Authenticate(User user)
+        private async Task Authenticate(UserRecord user)
         {
             var claims = new List<Claim>
             {
                 new Claim(ClaimsIdentity.DefaultNameClaimType, user.Name),
-                new Claim(ClaimsIdentity.DefaultRoleClaimType, user.Role)
+                new Claim(ClaimsIdentity.DefaultRoleClaimType, user.Role),
             };
 
-            ClaimsIdentity id = new ClaimsIdentity(claims, "ApplicationCookie", ClaimsIdentity.DefaultNameClaimType,
+            ClaimsIdentity id = new ClaimsIdentity(claims, "ApplicationCookie", 
+                ClaimsIdentity.DefaultNameClaimType,
                 ClaimsIdentity.DefaultRoleClaimType);
             
-            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id));
-        }
-
-        private string HashPassword(string password)
-        {
-           return Convert.ToBase64String(new MD5CryptoServiceProvider().ComputeHash(Encoding.UTF8.GetBytes(password)));
+            await HttpContext
+                .SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id));
         }
     }
 }
