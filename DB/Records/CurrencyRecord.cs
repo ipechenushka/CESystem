@@ -15,13 +15,13 @@ namespace CESystem.Models
         
         
         [Column("upper_commission_limit")]
-        public double? UpperCommissionLimit { set; get; } 
+        public float? UpperCommissionLimit { set; get; } 
         
         [Column("lower_commission_limit")]
-        public double? LowerCommissionLimit { set; get; }
+        public float? LowerCommissionLimit { set; get; }
         
         [Column("confirm_limit")]
-        public double? ConfirmCommissionLimit { set; get; } 
+        public float? ConfirmCommissionLimit { set; get; } 
         
         public CommissionRecord CommissionRecord { set; get; }
         public List<WalletRecord> WalletRecords { set; get; }

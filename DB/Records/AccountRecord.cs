@@ -16,6 +16,8 @@ namespace CESystem.Models
         public int UserId { set; get; } 
         public UserRecord UserRecord { set; get; }
         
+        
+        public List<ConfirmRequestRecord> ConfirmRequestRecords { set; get; }
         public List<WalletRecord> WalletRecords { set; get; }
         public List<CurrencyRecord> CurrencyRecords { set; get; }
     }

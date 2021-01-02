@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CESystem.Models
 {
-    [Table("purse")]
+    [Table("wallet")]
     public class WalletRecord
     {
         [Column("id_account"), Required]

@@ -15,11 +15,9 @@ namespace CESystem.Models
         [Column("id_user"), Required]
         public int UserId { set; get; }
         public UserRecord UserRecord { set; get; }
-        
-        
+
         [Column("id_account"), NotNull]
         public int AccountId { set; get; }
-        public AccountRecord AccountRecord { set; get; }
         
         [Column("type"), NotNull]
         public OperationType Type { set; get; }
@@ -32,8 +30,5 @@ namespace CESystem.Models
 
         [Column("date"), NotNull]
         public string Date { set; get; }
-        
-        
-        
     }
 }
