@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Threading.Tasks;
 using CESystem.ClientPart;
 using CESystem.DB;
@@ -49,6 +50,8 @@ namespace CESystem
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, ILogger<Startup> logger)
         {
+            CultureInfo.DefaultThreadCurrentCulture = new CultureInfo("en-US");
+            
             app.UseDeveloperExceptionPage();
             app.UseStatusCodePages();
             app.UseRouting();
