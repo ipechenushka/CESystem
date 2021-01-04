@@ -1,35 +1,32 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using System.Web.Helpers;
 using CESystem.Controllers;
 using CESystem.DB;
 using CESystem.Models;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 
 namespace CESystem.ClientPart
 {
     public interface IUserService
     {
-        public Task<UserRecord> FindUserByNameAsync(string name, string passwd);
-
-        public Task<UserRecord> FindUserByIdAsync(int id, string passwd);
-        public AccountRecord FindUserAccount(UserRecord user, int accountId);
-        public WalletRecord FindUserWallet(AccountRecord userAccount, int currencyId);
+        public Task AddOperationHistory(OperationType operationType, int userId, int accountId, float amount,
+            float commission, string currencyName);
+        public Task<UserRecord> FindUserByNameAsync(string name);
+        public Task<UserRecord> FindUserByIdAsync(int id);
+        public Task<UserRecord> FindUserByAccountIdAsync(int accountId);
+        public Task<AccountRecord> FindUserAccountAsync(int userId, int accountId);
+        public Task<WalletRecord> FindUserWalletAsync(int accountId, int currencyId);
         public Task<CurrencyRecord> FindCurrencyAsync(string name);
-
+        public WalletRecord CreateNewWallet(int accountId, int currencyId);
         public void AddRequestToConfirm(OperationType operationType,
             AccountRecord fromAccount,
             AccountRecord toAccount,
             float amount,
             float commission,
             string currency);
-        public string HashPassword(string password);
     }
     
     public class UserService : IUserService
@@ -41,35 +38,36 @@ namespace CESystem.ClientPart
             _db = localDbContext;
         }
         
-        public Task<UserRecord> FindUserByNameAsync(string name, string passwd)
+        public Task<UserRecord> FindUserByNameAsync(string name)
         {
-            return passwd == null
-                ? _db.UserRecords.FirstOrDefaultAsync(u => u.Name.Equals(name))
-                : _db.UserRecords.FirstOrDefaultAsync(x => x.Name.Equals(name) && x.Password.Equals(passwd));
+            return _db.UserRecords.FirstOrDefaultAsync(u => u.Name.Equals(name));
         }
 
-        public Task<UserRecord> FindUserByIdAsync(int id, string passwd)
+        public Task<UserRecord> FindUserByIdAsync(int id)
         {
-            return passwd == null 
-                ? _db.UserRecords.FirstOrDefaultAsync(u => u.Id == id) 
-                : _db.UserRecords.FirstOrDefaultAsync(x => x.Id == id && x.Password.Equals(passwd));        
+            return _db.UserRecords.FirstOrDefaultAsync(u => u.Id == id);
+        }
+        public async Task<UserRecord> FindUserByAccountIdAsync(int accountId)
+        {
+            var account = await _db.AccountRecords.FirstOrDefaultAsync(a => a.Id == accountId);
+            return  await _db.UserRecords.FirstOrDefaultAsync(u => u.Id == account.UserId);
         }
         
-        public AccountRecord FindUserAccount(UserRecord user, int accountId)
+        public Task<AccountRecord> FindUserAccountAsync(int userId, int accountId)
         {
-           return user.AccountRecords.FirstOrDefault(a => a.Id == accountId);
+           return _db.AccountRecords.FirstOrDefaultAsync(a => a.Id == accountId && a.UserId == userId);
         }
         
-        public WalletRecord FindUserWallet(AccountRecord userAccount, int currencyId)
+        public Task<WalletRecord> FindUserWalletAsync(int accountId, int currencyId)
         {
-            return userAccount.WalletRecords.FirstOrDefault(w => w.IdCurrency == currencyId);
+            return _db.WalletRecords.FirstOrDefaultAsync(w => w.IdCurrency == currencyId && w.IdAccount == accountId);
         }
 
         public Task<CurrencyRecord> FindCurrencyAsync(string name)
         {
             return _db.CurrencyRecords.FirstOrDefaultAsync(c => c.Name.Equals(name));
         }
-
+        
         public void AddRequestToConfirm(OperationType operationType, AccountRecord fromAccount, AccountRecord toAccount, float amount, float commission, string currency)
         {
             var req = new ConfirmRequestRecord
@@ -82,17 +80,31 @@ namespace CESystem.ClientPart
                 Commission = commission,
                 Currency = currency,
                 FormationDate = DateTime.Now.ToString("dd-MM-yyyy hh:mm:ss"),
-                Status = "active"
+                Status = RequestStatus.Active
             };
 
             _db.ConfirmRequestRecords.AddAsync(req);
             _db.SaveChangesAsync();
         }
-
-        public string HashPassword(string password)
+        
+        public async Task AddOperationHistory(OperationType operationType, int userId, int accountId, float amount, float commission, string currencyName)
         {
-            return Convert
-                .ToBase64String(new MD5CryptoServiceProvider().ComputeHash(Encoding.UTF8.GetBytes(password)));
+             await _db.OperationsHistoryRecords
+                .AddAsync(new OperationsHistoryRecord
+                {
+                    UserId = userId,
+                    AccountId = accountId,
+                    Type = operationType,
+                    Sum = amount,
+                    Commission = commission,
+                    Currency = currencyName,
+                    Date = DateTime.Now.ToString("dd-MM-yyyy hh:mm:ss")
+                });
+        }
+        
+        public WalletRecord CreateNewWallet(int accountId, int currencyId)
+        {
+            return new WalletRecord {IdAccount = accountId, IdCurrency = currencyId, CashValue = 0.0f};
         }
     }
 }
