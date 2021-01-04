@@ -29,7 +29,5 @@ namespace CESystem.Models
         
         [Column("is_absolute_type")]
         public bool? IsAbsoluteType { set; get; }
-        
-        
     }
 }

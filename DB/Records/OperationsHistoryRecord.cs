@@ -27,6 +27,9 @@ namespace CESystem.Models
 
         [Column("commission"), NotNull]
         public float Commission { set; get; }
+        
+        [Column("currency"), Required]
+        public string Currency { set; get; }
 
         [Column("date"), NotNull]
         public string Date { set; get; }

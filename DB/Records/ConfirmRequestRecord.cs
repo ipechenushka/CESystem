@@ -34,6 +34,6 @@ namespace CESystem.Models
         public string FormationDate { set; get; }
         
         [Column("status"), Required]
-        public string Status { set; get; }
+        public RequestStatus Status { set; get; }
     }
 }

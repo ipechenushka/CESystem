@@ -15,8 +15,11 @@ namespace CESystem.Models
         [Column("name"), Required]
         public string Name { set; get; }
         
-        [Column("password"), Required]
-        public string Password { set; get; }
+        [Column("password_hash"), Required]
+        public string PasswordHash { set; get; }
+        
+        [Column("password_salt"), Required]
+        public string PasswordSalt { set; get; }
         
         [Column("role"), Required]
         public string Role { set; get; }
