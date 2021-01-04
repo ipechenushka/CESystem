@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using System.Web.Helpers;
 using CESystem.ClientPart;
 using CESystem.DB;
 using CESystem.Models;
@@ -13,12 +14,6 @@ using Microsoft.Extensions.Logging;
 
 namespace CESystem.Controllers
 {
-    public enum AccountManipulationType
-    {
-        ChangeAccount = 1,
-        CreateNewAccount = 2
-    }
-    
     [Route("")] 
     public class UserController : Controller
     {
@@ -33,7 +28,7 @@ namespace CESystem.Controllers
             _userService = userService;
         }
 
-        [HttpGet, Route("home")]
+        [HttpGet]
         public IActionResult Home()
         {
             return Content("Welcome to CESystem!");
@@ -45,18 +40,23 @@ namespace CESystem.Controllers
             if (name == null || password == null) 
                 return BadRequest("Incorrect requests parameters");
             
-            var loginUser = await _userService.FindUserByNameAsync(name, _userService.HashPassword(password));
+            var loginUser = await _userService.FindUserByNameAsync(name);
             
             if (loginUser == null)
-                return StatusCode(403, "User not Found");
+                return NotFound("User not Found");
 
+            var accessStatus = Crypto.VerifyHashedPassword(loginUser.PasswordHash, password + loginUser.PasswordSalt);
+
+            if (!accessStatus)
+                return StatusCode(403, "Access denied");
+            
             await Authenticate(loginUser);
 
             _log.LogInformation($"{loginUser.Name} has entered in server");
             
             return loginUser.Role.Equals("admin")
                 ? Redirect("/admin/home")
-                : Redirect("/user/home");
+                : Redirect($"/account/{loginUser.CurrentAccount}");
         }
 
         [HttpGet, Route("login")]
@@ -71,14 +71,18 @@ namespace CESystem.Controllers
             if (name == null || password == null) 
                 return BadRequest("Incorrect requests parameters");
 
-            var newUser = await _userService.FindUserByNameAsync(name, null);
+            var newUser = await _userService.FindUserByNameAsync(name);
             
             if (newUser == null)
             {
+                var passwordSalt = Crypto.GenerateSalt();
+                var passwordHash = Crypto.HashPassword(password + passwordSalt);
+                
                 newUser = new UserRecord
                 {
                     Name = name, 
-                    Password = _userService.HashPassword(password), 
+                    PasswordSalt = passwordSalt,
+                    PasswordHash = passwordHash,
                     CreatedDate = DateTime.Now.ToString("dd-MM-yyyy hh:mm:ss")
                 };
 
@@ -97,7 +101,7 @@ namespace CESystem.Controllers
                 
                 _log.LogInformation($"{newUser.Name} has registered in server");
                 
-                return Redirect($"/user/account");
+                return Redirect($"/account/{newAccount.Id}");
             }
             
             return BadRequest("User with that name is already exist");
