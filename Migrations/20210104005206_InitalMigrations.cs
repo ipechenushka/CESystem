@@ -3,7 +3,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 namespace CESystem.Migrations
 {
-    public partial class InitMgration : Migration
+    public partial class InitalMigrations : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
@@ -101,6 +101,7 @@ namespace CESystem.Migrations
                     type = table.Column<int>(type: "integer", nullable: false),
                     amount = table.Column<float>(type: "real", nullable: false),
                     commission = table.Column<float>(type: "real", nullable: false),
+                    currency = table.Column<string>(type: "text", nullable: false),
                     date = table.Column<string>(type: "text", nullable: true)
                 },
                 constraints: table =>
@@ -127,7 +128,7 @@ namespace CESystem.Migrations
                     commission = table.Column<float>(type: "real", nullable: false),
                     currency = table.Column<string>(type: "text", nullable: false),
                     formation_date = table.Column<string>(type: "text", nullable: true),
-                    status = table.Column<string>(type: "text", nullable: false)
+                    status = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {

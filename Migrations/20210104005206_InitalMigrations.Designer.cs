@@ -3,15 +3,17 @@ using System;
 using CESystem.DB;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 namespace CESystem.Migrations
 {
     [DbContext(typeof(LocalDbContext))]
-    partial class LocalDbContextModelSnapshot : ModelSnapshot
+    [Migration("20210104005206_InitalMigrations")]
+    partial class InitalMigrations
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -230,15 +232,10 @@ namespace CESystem.Migrations
                         .HasColumnType("text")
                         .HasColumnName("name");
 
-                    b.Property<string>("PasswordHash")
+                    b.Property<string>("Password")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("password_hash");
-
-                    b.Property<string>("PasswordSalt")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("password_salt");
+                        .HasColumnName("password");
 
                     b.Property<string>("Role")
                         .IsRequired()

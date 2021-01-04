@@ -10,8 +10,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CESystem.Migrations
 {
     [DbContext(typeof(LocalDbContext))]
-    [Migration("20210102175145_InitMgration")]
-    partial class InitMgration
+    [Migration("20210104154039_FixedUserRecord")]
+    partial class FixedUserRecord
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
@@ -122,9 +122,8 @@ namespace CESystem.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("id_sender");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("text")
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.HasKey("Id");
@@ -183,6 +182,11 @@ namespace CESystem.Migrations
                         .HasColumnType("real")
                         .HasColumnName("commission");
 
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("currency");
+
                     b.Property<string>("Date")
                         .HasColumnType("text")
                         .HasColumnName("date");
@@ -228,10 +232,15 @@ namespace CESystem.Migrations
                         .HasColumnType("text")
                         .HasColumnName("name");
 
-                    b.Property<string>("Password")
+                    b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("password");
+                        .HasColumnName("password_hash");
+
+                    b.Property<string>("PasswordSalt")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("password_salt");
 
                     b.Property<string>("Role")
                         .IsRequired()
