@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Threading.Tasks;
+using CESystem.AdminPart;
 using CESystem.ClientPart;
 using CESystem.DB;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -35,9 +36,10 @@ namespace CESystem
             {
                 options.UseNpgsql(Configuration.GetConnectionString("test"));
             });
-
+    
             services.AddScoped<IUserService, UserService>();
-            
+            services.AddScoped<IAdminService, AdminService>();
+
             services
                 .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
                 .AddCookie(options => 
