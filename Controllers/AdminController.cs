@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Threading.Tasks;
+using CESystem.AdminPart;
 using CESystem.ClientPart;
 using CESystem.DB;
 using CESystem.Models;
@@ -36,18 +37,18 @@ namespace CESystem.Controllers
     public class AdminController : Controller
     {
         private readonly IUserService _userService;
+        private readonly IAdminService _adminService;
         private readonly LocalDbContext _db;
-        public AdminController(IUserService userService, LocalDbContext localDbContext)
+        public AdminController(IUserService userService, IAdminService adminService, LocalDbContext localDbContext)
         {
             _userService = userService;
+            _adminService = adminService;
             _db = localDbContext;
         }
 
         [HttpGet("home")]
-        public IActionResult Home()
-        {
-            return Ok("admin home");
-        }
+        public IActionResult Home() => Ok("admin home");
+       
 
         [HttpPost("money")]
         public async Task<IActionResult> MoneyOperation(MoneyManipulationOperation? operation, string currencyName, int? accountIdParam, float? amountParam)
@@ -70,7 +71,7 @@ namespace CESystem.Controllers
                     if (userWallet == null)
                     {
                         userWallet = _userService.CreateNewWallet(accountId, currency.Id);
-                        await _db.WalletRecords.AddAsync(userWallet);
+                        await _userService.AddWalletAsync(userWallet);
                     }
                     
                     userWallet.CashValue += amount;
@@ -102,13 +103,13 @@ namespace CESystem.Controllers
                 var currency = await _userService.FindCurrencyAsync(currencyName);
                 if (currency == null)
                     return BadRequest("Currency doesn't exist");
-                
-                commission = await _db.CommissionRecords.FirstOrDefaultAsync(c => c.CurrencyId == currency.Id);
+
+                commission = await _userService.FindCurrencyCommissionAsync(currency.Id);
                 
                 if (commission == null)
                 {
                     commission = new CommissionRecord {CurrencyId = currency.Id};
-                    await _db.CommissionRecords.AddAsync(commission);
+                    await _adminService.AddCommissionAsync(commission);
                 }
             }
             else if (userId != null)
@@ -117,12 +118,12 @@ namespace CESystem.Controllers
                 if (user == null)
                     return BadRequest("Currency doesn't exist");
                 
-                commission = await _db.CommissionRecords.FirstOrDefaultAsync(c => c.UserId == userId);
+                commission = await _userService.FindUserCommissionAsync(user.Id);
                 
                 if (commission == null)
                 {
                     commission = new CommissionRecord {UserId = userId};
-                    await _db.CommissionRecords.AddAsync(commission);
+                    await _adminService.AddCommissionAsync(commission);
                 }
             }
             else
@@ -184,13 +185,13 @@ namespace CESystem.Controllers
                     if (currency != null)
                         return BadRequest("This currency is already exist");
                     
-                    await _db.CurrencyRecords.AddAsync(new CurrencyRecord {Name = currencyName});
+                    await _adminService.AddCurrencyAsync(new CurrencyRecord {Name = currencyName});
                     break;
                 case CurrencyManipulationOperation.Delete:
                     if (currency == null)
                         return BadRequest("This currency doesn't exist");
 
-                    _db.CurrencyRecords.Remove(currency);
+                    _adminService.DeleteCurrency(currency);
                     break;
                 default:
                     return BadRequest("Undefined operation");
@@ -206,7 +207,7 @@ namespace CESystem.Controllers
             if (requestId == null)
                 return BadRequest("Incorrect request params");
             
-            var request = await _db.ConfirmRequestRecords.FirstOrDefaultAsync(r => r.Id == requestId);
+            var request = await _adminService.FindRequestToConfirm((int) requestId);
 
             if (request == null)
                 return BadRequest("This request doesn't exist.");
@@ -236,7 +237,7 @@ namespace CESystem.Controllers
                     return BadRequest("Undefined operation");
             }
             
-            await _userService.AddOperationHistory(request.OperationType, senderUser.Id, request.SenderId,
+            await _userService.AddOperationHistoryAsync(request.OperationType, senderUser.Id, request.SenderId,
                 request.Amount, request.Commission, currency.Name);
             
             request.Status = RequestStatus.Completed;

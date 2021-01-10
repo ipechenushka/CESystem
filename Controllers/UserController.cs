@@ -17,23 +17,26 @@ namespace CESystem.Controllers
     [Route("")] 
     public class UserController : Controller
     {
-        private readonly LocalDbContext _db;
         private readonly ILogger _log;
         private readonly IUserService _userService;
-        
-        public UserController(LocalDbContext dbContext, ILogger<Startup> logger, IUserService userService)
+        private readonly LocalDbContext _db;
+        public UserController(ILogger<Startup> logger, IUserService userService, LocalDbContext localDbContext)
         {
-            _db = dbContext;
+            _db = localDbContext;
             _log = logger;
             _userService = userService;
         }
 
         [HttpGet]
-        public IActionResult Home()
-        {
-            return Content("Welcome to CESystem!");
-        }
+        public IActionResult HomePage() => Content("Welcome to CESystem!");
+     
+        [HttpGet, Route("registration")]
+        public IActionResult RegistrationPage() => Content("Registration Page");
+        
+        [HttpGet, Route("login")]
+        public IActionResult LoginPage() => Content("Login Page");
 
+        
         [HttpPost, Route("login")]
         public async Task<IActionResult> Login(string name, string password)
         {
@@ -48,7 +51,7 @@ namespace CESystem.Controllers
             var accessStatus = Crypto.VerifyHashedPassword(loginUser.PasswordHash, password + loginUser.PasswordSalt);
 
             if (!accessStatus)
-                return StatusCode(403, "Access denied");
+                return Forbid();
             
             await Authenticate(loginUser);
 
@@ -57,12 +60,6 @@ namespace CESystem.Controllers
             return loginUser.Role.Equals("admin")
                 ? Redirect("/admin/home")
                 : Redirect($"/account/{loginUser.CurrentAccount}");
-        }
-
-        [HttpGet, Route("login")]
-        public IActionResult Login()
-        {
-            return Content("Login Page");
         }
 
         [HttpPost, Route("registration")]
@@ -86,12 +83,12 @@ namespace CESystem.Controllers
                     CreatedDate = DateTime.Now.ToString("dd-MM-yyyy hh:mm:ss")
                 };
 
-                await _db.UserRecords.AddAsync(newUser);
+                await _userService.AddUserAsync(newUser);
                 await _db.SaveChangesAsync();
-
-                var newAccount = new AccountRecord { UserId = newUser.Id };
                 
-                await _db.AccountRecords.AddAsync(newAccount);
+                var newAccount = new AccountRecord { UserId = newUser.Id };
+
+                await _userService.AddAccountAsync(newAccount);
                 await _db.SaveChangesAsync();
 
                 newUser.CurrentAccount = newAccount.Id;
@@ -105,13 +102,6 @@ namespace CESystem.Controllers
             }
             
             return BadRequest("User with that name is already exist");
-        }
-
-
-        [HttpGet, Route("registration")]
-        public IActionResult Registration()
-        {
-            return Content("Registration Page");
         }
 
         private async Task Authenticate(UserRecord user)

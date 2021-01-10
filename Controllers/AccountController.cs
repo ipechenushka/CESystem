@@ -22,14 +22,12 @@ namespace CESystem.Controllers
     [Route("account")]
     public class AccountController : Controller
     {
-        private readonly LocalDbContext _db;
         private readonly IUserService _userService;
-        private readonly ILogger _logger;
-        public AccountController(LocalDbContext dbContext, IUserService userService, ILogger<Startup> logger)
+        private readonly LocalDbContext _db;
+        public AccountController(IUserService userService, LocalDbContext localDbContext)
         {
-           _db = dbContext;
-           _logger = logger;
-           _userService = userService;
+            _userService = userService;
+            _db = localDbContext;
         }
 
         [HttpGet, Route("{accountId:int}")]
@@ -37,14 +35,12 @@ namespace CESystem.Controllers
         {
             var user = await _userService.FindUserByNameAsync(HttpContext.User.Identity.Name);
 
-
             if (await IsAccountBelongToUser(accountId))
                 return NotFound();
             
             user.CurrentAccount = accountId;
             
             await _db.SaveChangesAsync();
-
             return Ok($"Current account - {accountId}");
         }
 
@@ -53,17 +49,15 @@ namespace CESystem.Controllers
         {
             var user = await _userService.FindUserByNameAsync(HttpContext.User.Identity.Name);
 
-            await _db.AccountRecords.AddAsync(new AccountRecord {UserId = user.Id});
+            await _userService.AddAccountAsync(new AccountRecord {UserId = user.Id});
             await _db.SaveChangesAsync();
             
             return Ok("Created successfully");
         }
         
         [HttpGet, Route("")]
-        public IActionResult Home()
-        {
-            return Ok($"Welcome to server - {HttpContext.User.Identity.Name}");
-        }
+        public IActionResult Home() => Ok($"Welcome to server - {HttpContext.User.Identity.Name}");
+        
         
         [HttpPost, Route("{accountId:int}/operation")]
         public async Task<IActionResult> Operation(int accountId, OperationType? operationType, float? amount, string inCurrency, string toUserName)
@@ -90,7 +84,7 @@ namespace CESystem.Controllers
                     return BadRequest("You don't have money in this currency on this account");
 
                 userWallet = _userService.CreateNewWallet(accountId, currency.Id);
-                await _db.WalletRecords.AddAsync(userWallet);
+                await _userService.AddWalletAsync(userWallet);
             }
 
             var commission = await CalculateCommission(user, operationType, currency, targetAmount);
@@ -108,7 +102,7 @@ namespace CESystem.Controllers
                     toAccount = await _userService.FindUserAccountAsync(toUser.Id, toUser.CurrentAccount);
                 }
    
-                _userService.AddRequestToConfirm((OperationType) operationType, userAccount, toAccount, targetAmount, commission, currency.Name);
+                await _userService.AddRequestToConfirmAsync((OperationType) operationType, userAccount, toAccount, targetAmount, commission, currency.Name);
                 return Ok("Your transaction is pending confirmation, please wait.");
             }
 
@@ -127,7 +121,7 @@ namespace CESystem.Controllers
                     if (toWallet == null)
                     {
                         toWallet = _userService.CreateNewWallet(toAccount.Id, currency.Id);
-                        await _db.WalletRecords.AddAsync(toWallet);
+                        await _userService.AddWalletAsync(toWallet);
                     }
                     
                     if (userWallet.CashValue - commission - targetAmount < 0.0)
@@ -155,7 +149,7 @@ namespace CESystem.Controllers
 
             userWallet.CashValue -= commission;
 
-            await _userService.AddOperationHistory((OperationType) operationType, user.Id, userAccount.Id, targetAmount, commission, currency.Name);
+            await _userService.AddOperationHistoryAsync((OperationType) operationType, user.Id, userAccount.Id, targetAmount, commission, currency.Name);
             await _db.SaveChangesAsync();
             
             return Ok("Operation completed");
@@ -163,8 +157,8 @@ namespace CESystem.Controllers
         private async Task<float> CalculateCommission(UserRecord user, OperationType? type, CurrencyRecord currency, float amount)
         {
             var commission = 0.0f;
-            var personalCommissionRecord = await _db.CommissionRecords.FirstOrDefaultAsync(c => c.UserId.Equals(user.Id));
-            var globalCommissionRecord = await _db.CommissionRecords.FirstOrDefaultAsync(c => c.CurrencyId.Equals(currency.Id));
+            var personalCommissionRecord = await _userService.FindUserCommissionAsync(user.Id);
+            var globalCommissionRecord = await _userService.FindCurrencyCommissionAsync(currency.Id);
 
             if (personalCommissionRecord == null && globalCommissionRecord == null)
                 return commission;
