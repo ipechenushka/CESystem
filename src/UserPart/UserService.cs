@@ -7,21 +7,41 @@ using CESystem.Controllers;
 using CESystem.DB;
 using CESystem.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace CESystem.ClientPart
 {
     public interface IUserService
     {
-        public Task AddOperationHistory(OperationType operationType, int userId, int accountId, float amount,
-            float commission, string currencyName);
         public Task<UserRecord> FindUserByNameAsync(string name);
+        
         public Task<UserRecord> FindUserByIdAsync(int id);
+        
         public Task<UserRecord> FindUserByAccountIdAsync(int accountId);
+        
         public Task<AccountRecord> FindUserAccountAsync(int userId, int accountId);
+        
         public Task<WalletRecord> FindUserWalletAsync(int accountId, int currencyId);
+
+        public Task<CommissionRecord> FindUserCommissionAsync(int userId);
+        
         public Task<CurrencyRecord> FindCurrencyAsync(string name);
+        
+        public Task<CommissionRecord> FindCurrencyCommissionAsync(int currencyId);
+
         public WalletRecord CreateNewWallet(int accountId, int currencyId);
-        public void AddRequestToConfirm(OperationType operationType,
+        
+        public ValueTask<EntityEntry<AccountRecord>> AddAccountAsync(AccountRecord accountRecord);
+        
+        public ValueTask<EntityEntry<WalletRecord>> AddWalletAsync(WalletRecord walletRecord);
+        
+        public ValueTask<EntityEntry<UserRecord>> AddUserAsync(UserRecord userRecord);
+
+        public ValueTask<EntityEntry<CommissionRecord>> AddCommissionAsync(CommissionRecord commissionRecord);
+     
+        public ValueTask<EntityEntry<OperationsHistoryRecord>> AddOperationHistoryAsync(OperationType operationType, int userId, int accountId, float amount,
+            float commission, string currencyName);
+        public ValueTask<EntityEntry<ConfirmRequestRecord>> AddRequestToConfirmAsync(OperationType operationType,
             AccountRecord fromAccount,
             AccountRecord toAccount,
             float amount,
@@ -38,37 +58,38 @@ namespace CESystem.ClientPart
             _db = localDbContext;
         }
         
-        public Task<UserRecord> FindUserByNameAsync(string name)
-        {
-            return _db.UserRecords.FirstOrDefaultAsync(u => u.Name.Equals(name));
-        }
+        public Task<UserRecord> FindUserByNameAsync(string name) => 
+            _db.UserRecords.FirstOrDefaultAsync(u => u.Name.Equals(name));
 
-        public Task<UserRecord> FindUserByIdAsync(int id)
-        {
-            return _db.UserRecords.FirstOrDefaultAsync(u => u.Id == id);
-        }
+        public Task<UserRecord> FindUserByIdAsync(int id) => 
+            _db.UserRecords.FirstOrDefaultAsync(u => u.Id == id);
+        
         public async Task<UserRecord> FindUserByAccountIdAsync(int accountId)
         {
             var account = await _db.AccountRecords.FirstOrDefaultAsync(a => a.Id == accountId);
-            return  await _db.UserRecords.FirstOrDefaultAsync(u => u.Id == account.UserId);
+            return await _db.UserRecords.FirstOrDefaultAsync(u => u.Id == account.UserId);
         }
         
-        public Task<AccountRecord> FindUserAccountAsync(int userId, int accountId)
-        {
-           return _db.AccountRecords.FirstOrDefaultAsync(a => a.Id == accountId && a.UserId == userId);
-        }
+        public Task<AccountRecord> FindUserAccountAsync(int userId, int accountId) => 
+            _db.AccountRecords.FirstOrDefaultAsync(a => a.Id == accountId && a.UserId == userId);
         
-        public Task<WalletRecord> FindUserWalletAsync(int accountId, int currencyId)
-        {
-            return _db.WalletRecords.FirstOrDefaultAsync(w => w.IdCurrency == currencyId && w.IdAccount == accountId);
-        }
+        
+        public Task<WalletRecord> FindUserWalletAsync(int accountId, int currencyId) => 
+            _db.WalletRecords.FirstOrDefaultAsync(w => w.IdCurrency == currencyId && w.IdAccount == accountId);
 
-        public Task<CurrencyRecord> FindCurrencyAsync(string name)
-        {
-            return _db.CurrencyRecords.FirstOrDefaultAsync(c => c.Name.Equals(name));
-        }
+
+        public Task<CommissionRecord> FindUserCommissionAsync(int userId) =>
+            _db.CommissionRecords.FirstOrDefaultAsync(c => c.UserId == userId);
+
+        public Task<CurrencyRecord> FindCurrencyAsync(string name) =>
+            _db.CurrencyRecords.FirstOrDefaultAsync(c => c.Name.Equals(name));
         
-        public void AddRequestToConfirm(OperationType operationType, AccountRecord fromAccount, AccountRecord toAccount, float amount, float commission, string currency)
+
+        public Task<CommissionRecord> FindCurrencyCommissionAsync(int currencyId) =>
+            _db.CommissionRecords.FirstOrDefaultAsync(c => c.CurrencyId == currencyId);
+
+        public ValueTask<EntityEntry<ConfirmRequestRecord>> AddRequestToConfirmAsync(OperationType operationType, AccountRecord fromAccount,
+            AccountRecord toAccount, float amount, float commission, string currency)
         {
             var req = new ConfirmRequestRecord
             {
@@ -83,13 +104,16 @@ namespace CESystem.ClientPart
                 Status = RequestStatus.Active
             };
 
-            _db.ConfirmRequestRecords.AddAsync(req);
-            _db.SaveChangesAsync();
+            return _db.ConfirmRequestRecords.AddAsync(req);
         }
         
-        public async Task AddOperationHistory(OperationType operationType, int userId, int accountId, float amount, float commission, string currencyName)
+        public ValueTask<EntityEntry<CommissionRecord>> AddCommissionAsync(CommissionRecord commissionRecord) =>
+            _db.CommissionRecords.AddAsync(commissionRecord);
+
+        public ValueTask<EntityEntry<OperationsHistoryRecord>> AddOperationHistoryAsync(OperationType operationType,
+            int userId, int accountId, float amount, float commission, string currencyName)
         {
-             await _db.OperationsHistoryRecords
+              return _db.OperationsHistoryRecords
                 .AddAsync(new OperationsHistoryRecord
                 {
                     UserId = userId,
@@ -102,9 +126,17 @@ namespace CESystem.ClientPart
                 });
         }
         
-        public WalletRecord CreateNewWallet(int accountId, int currencyId)
-        {
-            return new WalletRecord {IdAccount = accountId, IdCurrency = currencyId, CashValue = 0.0f};
-        }
+        public WalletRecord CreateNewWallet(int accountId, int currencyId) => 
+            new WalletRecord {IdAccount = accountId, IdCurrency = currencyId, CashValue = 0.0f};
+        
+        public ValueTask<EntityEntry<AccountRecord>> AddAccountAsync(AccountRecord accountRecord) => 
+            _db.AccountRecords.AddAsync(accountRecord);
+
+        public ValueTask<EntityEntry<WalletRecord>> AddWalletAsync(WalletRecord walletRecord) => 
+            _db.WalletRecords.AddAsync(walletRecord);
+
+        public ValueTask<EntityEntry<UserRecord>> AddUserAsync(UserRecord userRecord) => 
+            _db.UserRecords.AddAsync(userRecord);
+        
     }
 }
