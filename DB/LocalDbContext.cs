@@ -8,10 +8,6 @@ namespace CESystem.DB
     {
         public LocalDbContext(DbContextOptions<LocalDbContext> options) : base(options) { }
 
-        public LocalDbContext()
-        {
-        }
-
         public DbSet<UserRecord> UserRecords { get; set; }
         public DbSet<AccountRecord> AccountRecords { set; get; }
         public DbSet<CurrencyRecord> CurrencyRecords { set; get; }
@@ -19,7 +15,7 @@ namespace CESystem.DB
         public DbSet<CommissionRecord> CommissionRecords { set; get; }
         public DbSet<OperationsHistoryRecord> OperationsHistoryRecords { set; get; }
         public DbSet<ConfirmRequestRecord> ConfirmRequestRecords { set; get; }
-
+        
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<UserRecord>()
