@@ -36,9 +36,7 @@ namespace CESystem.ClientPart
         public ValueTask<EntityEntry<WalletRecord>> AddWalletAsync(WalletRecord walletRecord);
         
         public ValueTask<EntityEntry<UserRecord>> AddUserAsync(UserRecord userRecord);
-
-        public ValueTask<EntityEntry<CommissionRecord>> AddCommissionAsync(CommissionRecord commissionRecord);
-     
+        
         public ValueTask<EntityEntry<OperationsHistoryRecord>> AddOperationHistoryAsync(OperationType operationType, int userId, int accountId, float amount,
             float commission, string currencyName);
         public ValueTask<EntityEntry<ConfirmRequestRecord>> AddRequestToConfirmAsync(OperationType operationType,
@@ -48,7 +46,7 @@ namespace CESystem.ClientPart
             float commission,
             string currency);
     }
-    
+
     public class UserService : IUserService
     {
         private readonly LocalDbContext _db;
@@ -107,9 +105,6 @@ namespace CESystem.ClientPart
             return _db.ConfirmRequestRecords.AddAsync(req);
         }
         
-        public ValueTask<EntityEntry<CommissionRecord>> AddCommissionAsync(CommissionRecord commissionRecord) =>
-            _db.CommissionRecords.AddAsync(commissionRecord);
-
         public ValueTask<EntityEntry<OperationsHistoryRecord>> AddOperationHistoryAsync(OperationType operationType,
             int userId, int accountId, float amount, float commission, string currencyName)
         {

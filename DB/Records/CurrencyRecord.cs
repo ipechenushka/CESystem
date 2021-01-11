@@ -21,7 +21,7 @@ namespace CESystem.Models
         public float? LowerCommissionLimit { set; get; }
         
         [Column("confirm_limit")]
-        public float? ConfirmCommissionLimit { set; get; } 
+        public float? ConfirmLimit { set; get; } 
         
         public CommissionRecord CommissionRecord { set; get; }
         public List<WalletRecord> WalletRecords { set; get; }

@@ -34,8 +34,9 @@ namespace CESystem.Controllers
         public async Task<IActionResult> ChooseAccount(int accountId)
         {
             var user = await _userService.FindUserByNameAsync(HttpContext.User.Identity.Name);
+            var accessDenied = await IsAccountBelongToUser(user, accountId);
 
-            if (await IsAccountBelongToUser(accountId))
+            if (accessDenied)
                 return NotFound();
             
             user.CurrentAccount = accountId;
@@ -62,7 +63,10 @@ namespace CESystem.Controllers
         [HttpPost, Route("{accountId:int}/operation")]
         public async Task<IActionResult> Operation(int accountId, OperationType? operationType, float? amount, string inCurrency, string toUserName)
         {
-            if (await IsAccountBelongToUser(accountId)) 
+            var user = await _userService.FindUserByNameAsync(HttpContext.User.Identity.Name);
+            var accessDenied = await IsAccountBelongToUser(user, accountId);
+
+            if (accessDenied) 
                 return NotFound();
             
             if (inCurrency == null || operationType == null || amount == null || operationType == OperationType.Transfer && toUserName == null)
@@ -74,7 +78,6 @@ namespace CESystem.Controllers
             if (currency == null)
                 return BadRequest("Currency not found");
             
-            var user = await _userService.FindUserByNameAsync(HttpContext.User.Identity.Name);
             var userAccount = await _userService.FindUserAccountAsync(user.Id, user.CurrentAccount);
             var userWallet = await _userService.FindUserWalletAsync(userAccount.Id, currency.Id);
 
@@ -88,9 +91,9 @@ namespace CESystem.Controllers
             }
 
             var commission = await CalculateCommission(user, operationType, currency, targetAmount);
-            var commissionConfirmLimit = currency.ConfirmCommissionLimit;
+            var confirmLimit = currency.ConfirmLimit;
 
-            if (commissionConfirmLimit != null && targetAmount > commissionConfirmLimit)
+            if (confirmLimit != null && targetAmount > confirmLimit)
             {
                 AccountRecord toAccount = null;
                 
@@ -106,6 +109,9 @@ namespace CESystem.Controllers
                 return Ok("Your transaction is pending confirmation, please wait.");
             }
 
+            if (userWallet.CashValue - commission - targetAmount < 0.0 || userWallet.CashValue - commission + targetAmount < 0.0)
+                return BadRequest("You don't have enough money to make the operation!");
+            
             switch (operationType)
             {
                 case OperationType.Transfer:
@@ -123,9 +129,6 @@ namespace CESystem.Controllers
                         toWallet = _userService.CreateNewWallet(toAccount.Id, currency.Id);
                         await _userService.AddWalletAsync(toWallet);
                     }
-                    
-                    if (userWallet.CashValue - commission - targetAmount < 0.0)
-                        return BadRequest("You don't have enough money to make a transfer");
 
                     toWallet.CashValue += targetAmount;
                     userWallet.CashValue -= targetAmount;
@@ -138,8 +141,6 @@ namespace CESystem.Controllers
                 }
                 case OperationType.Withdraw:
                 {
-                    if (userWallet.CashValue - commission - targetAmount < 0.0)
-                        return BadRequest("You don't have enough money to make a withdraw");
                     userWallet.CashValue -= targetAmount;
                     break;
                 }
@@ -217,11 +218,9 @@ namespace CESystem.Controllers
             return commission;
         }
         
-        private async Task<bool> IsAccountBelongToUser(int accountId)
+        private async Task<bool> IsAccountBelongToUser(UserRecord user, int accountId)
         {
-            var user = await _userService.FindUserByNameAsync(HttpContext.User.Identity.Name);
             var userAccount = await _userService.FindUserAccountAsync(user.Id, accountId);
-
             return userAccount == null;
         }
     }

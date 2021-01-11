@@ -165,7 +165,7 @@ namespace CESystem.Controllers
                 currency.UpperCommissionLimit = up;
 
             if (confirm != null)
-                currency.ConfirmCommissionLimit = confirm;
+                currency.ConfirmLimit = confirm;
 
             await _db.SaveChangesAsync();
             return Ok("Currency limit operations completed");
