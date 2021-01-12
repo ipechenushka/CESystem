@@ -93,6 +93,9 @@ namespace CESystem.Controllers
             var commission = await CalculateCommission(user, operationType, currency, targetAmount);
             var confirmLimit = currency.ConfirmLimit;
 
+            if (userWallet.CashValue - commission - targetAmount < 0.0 || userWallet.CashValue - commission + targetAmount < 0.0)
+                return BadRequest("You don't have enough money to make the operation!");
+            
             if (confirmLimit != null && targetAmount > confirmLimit)
             {
                 AccountRecord toAccount = null;
@@ -109,9 +112,6 @@ namespace CESystem.Controllers
                 return Ok("Your transaction is pending confirmation, please wait.");
             }
 
-            if (userWallet.CashValue - commission - targetAmount < 0.0 || userWallet.CashValue - commission + targetAmount < 0.0)
-                return BadRequest("You don't have enough money to make the operation!");
-            
             switch (operationType)
             {
                 case OperationType.Transfer:

@@ -94,7 +94,8 @@ namespace CESystem.Controllers
         }
 
         [HttpPost("commission")]
-        public async Task<IActionResult> CommissionOperation(float? transferCommission, float? depositCommission, float? withdrawCommission, bool? isAbsoluteType, string currencyName, int? userId)
+        public async Task<IActionResult> CommissionOperation(float? transferCommission, float? depositCommission,
+            float? withdrawCommission, bool? isAbsoluteType, string currencyName, int? userId)
         {
             CommissionRecord commission;
             
@@ -116,7 +117,7 @@ namespace CESystem.Controllers
             {
                 var user = await _userService.FindUserByIdAsync((int) userId);
                 if (user == null)
-                    return BadRequest("Currency doesn't exist");
+                    return BadRequest("User doesn't exist");
                 
                 commission = await _userService.FindUserCommissionAsync(user.Id);
                 
@@ -141,7 +142,8 @@ namespace CESystem.Controllers
 
             if (isAbsoluteType != null)
                 commission.IsAbsoluteType = true;
-            
+
+
             await _db.SaveChangesAsync();
             return Ok("Commission operations completed");
         }
@@ -158,6 +160,9 @@ namespace CESystem.Controllers
             if (currency == null)
                 return BadRequest("Currency doesn't exist");
 
+            if (low != null && up != null && low > up)
+                return BadRequest("Lower limit cannot be greater than upper limit!");
+            
             if (low != null)
                 currency.LowerCommissionLimit = low;
 
